@@ -48,7 +48,7 @@ mm_url() {
   port_http=$(docker port web 80 | cut -d: -f2)
   port_https=$(docker port web 443 | cut -d: -f2)
 
-  if which docker-machine >/dev/null 2>&1
+  if which docker-machine ip >/dev/null 2>&1
   then
     echo "Found \"docker-machine\", guessing you're not on Linux. Getting ip address from VM."
     addr=$(docker-machine ip)
@@ -84,11 +84,16 @@ docker_run() {
     local image=$(mm_image_name $1)
     local options=$3
 
+    echo "docker_run image    : $image"
+    echo "docker_run container: $container"
+    echo "docker_run options  : $options"
     if ! container_exists $container ; then
+#        local command="docker run --env-file=env -d -P $options --name=$container $image"
         local command="docker run --env-file=env -d -P $options --name=$container $image"
         echo $command
         $command || true
     else
+        echo "docker_run container exists. Starting $container"
         docker start $container
     fi
 }
@@ -113,20 +118,32 @@ docker_run_jobs() {
 }
 
 docker_run_haproxy() {
-    docker_run mmooc/canvas haproxy "--link $(mm_container_name web):web"
+#    docker run -d --name canvas-haproxy --link web:web1 -p 443:443 -p 80:80 canvas-haproxy
+    docker_run mmooc/haproxy haproxy "--link web:web1 -p 443:443 -p 80:80"
 }
 
 container_exists() {
+    echo "docker inspect $1"
     docker inspect "$1" > /dev/null 2>&1
 }
 
 mm_start_data() {
+    echo "mm_start_data"
     if ! container_exists $(mm_container_name web-data) ; then
-        docker run -v /var/log/apache2 -v /opt/canvas-lms/log -v /opt/canvas-lms/tmp/files --name=$(mm_container_name web-data) ubuntu:12.04
+        docker run -v /var/log/apache2 -v /opt/canvas-lms/log -v /opt/canvas-lms/tmp/files --name=$(mm_container_name web-data) ubuntu:16.04
+    else
+        echo "web-data existed."
     fi
 
     if ! container_exists $(mm_container_name db-data) ; then
-        docker run -v /var/lib/postgresql/9.1/main --name=$(mm_container_name db-data) ubuntu:12.04
+        echo "db-data does not exist. Start it."
+        local container=$(mm_container_name "db-data")
+        echo "container name: $container"
+        local command="docker run -v /var/lib/postgresql/9.5/main --name=$container ubuntu:16.04"
+        echo $command
+        $command
+    else
+        echo "db-data existed."
     fi
 }
 
@@ -146,12 +163,13 @@ EOF
 }
 
 mm_start() {
+    echo "mm_start $1"
     case $1 in
         all)
             docker_run_db
             docker_run_cache
             docker_run_web
-            #docker_run_haproxy
+            docker_run_haproxy
             docker_run_jobs
             ;;
         data)
@@ -169,8 +187,8 @@ mm_start() {
         web)
             docker_run_web
             ;;
-        hapoxy)
-            docker_run_web
+        haproxy)
+            docker_run_haproxy
             ;;
         *)
             mm_help start
@@ -189,8 +207,11 @@ mm_init_schema() {
 
 
 mm_initdb() {
+    echo "mm_initdb begin"
     local image=$(mm_image_name mmooc/db)
+    echo "image: $image"
     docker run --rm -t -i --env-file=env --user=root --volumes-from=$(mm_container_name db-data) $image /bin/bash /root/initdb
+    echo "mm_initdb end"
 }
 
 
@@ -201,6 +222,7 @@ mm_boot() {
     mm_start cache
     mm_init_schema
     mm_start web
+#    mm_start haproxy
     mm_url
 }
 
@@ -311,6 +333,9 @@ case $command in
         ;;
     help)
         mm_help "$@"
+        ;;
+    startdata)
+        mm_start_data
         ;;
     initdb)
         mm_initdb
