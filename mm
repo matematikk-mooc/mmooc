@@ -222,7 +222,7 @@ mm_boot() {
     mm_start cache
     mm_init_schema
     mm_start web
-#    mm_start haproxy
+    mm_start haproxy
     mm_url
 }
 
