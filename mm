@@ -90,7 +90,7 @@ docker_run() {
     if ! container_exists $container ; then
 #        local command="docker run --env-file=env -d -P $options --name=$container $image"
         local command="docker run --env-file=env -d -P $options --name=$container $image"
-        echo $command
+        echo $command >> mmdos.bat
         $command || true
     else
         echo "docker_run container exists. Starting $container"
@@ -113,13 +113,15 @@ docker_run_web() {
 docker_run_jobs() {
     local image=$(mm_image_name mmooc/canvas)
     local command="docker run --env-file=env -d -P --volumes-from=$(mm_container_name web-data) --link=$(mm_container_name db):db --link=$(mm_container_name cache):cache --name=jobs $image /opt/canvas-lms/script/canvas_init run"
-    echo $command
+    echo $command >> mmdos.bat
     $command || true
 }
 
 docker_run_haproxy() {
 #    docker run -d --name canvas-haproxy --link web:web1 -p 443:443 -p 80:80 canvas-haproxy
-    docker_run mmooc/haproxy haproxy "--link web:web1 -p 443:443 -p 80:80"
+    local command='docker_run mmooc/haproxy haproxy "--link web:web1 -p 443:443 -p 80:80"'
+    echo $command >> mmdos.bat
+    $command
 }
 
 container_exists() {
@@ -130,7 +132,9 @@ container_exists() {
 mm_start_data() {
     echo "mm_start_data"
     if ! container_exists $(mm_container_name web-data) ; then
-        docker run -v /var/log/apache2 -v /opt/canvas-lms/log -v /opt/canvas-lms/tmp/files --name=$(mm_container_name web-data) ubuntu:16.04
+        local command="docker run -v /var/log/apache2 -v /opt/canvas-lms/log -v /opt/canvas-lms/tmp/files --name=$(mm_container_name web-data) ubuntu:16.04"
+	    echo $command >> mmdos.bat
+        $command
     else
         echo "web-data existed."
     fi
@@ -140,7 +144,7 @@ mm_start_data() {
         local container=$(mm_container_name "db-data")
         echo "container name: $container"
         local command="docker run -v /var/lib/postgresql/9.5/main --name=$container ubuntu:16.04"
-        echo $command
+	    echo $command >> mmdos.bat
         $command
     else
         echo "db-data existed."
@@ -200,9 +204,13 @@ mm_init_schema() {
     local image=$(mm_image_name mmooc/canvas)
     echo "Schema setup is bugged and needs to run twice."
     echo "Setting up schema for the first time. Output in init_schema.1.txt"
-    docker run --rm --env-file=env -w /opt/canvas-lms --link=$(mm_container_name db):db --link=$(mm_container_name cache):cache $image bundle exec rake db:initial_setup >&2 2> init_schema.1.txt
+    local command="docker run --rm --env-file=env -w /opt/canvas-lms --link=$(mm_container_name db):db --link=$(mm_container_name cache):cache $image bundle exec rake db:initial_setup >&2 2> init_schema.1.txt"
+    echo $command >> mmdos.bat
+    $command
     echo "Second time's the charm. Output in init_schema.2.txt"
-    docker run --rm --env-file=env -w /opt/canvas-lms --link=$(mm_container_name db):db --link=$(mm_container_name cache):cache $image bundle exec rake db:initial_setup >&2 2> init_schema.2.txt
+    local command="docker run --rm --env-file=env -w /opt/canvas-lms --link=$(mm_container_name db):db --link=$(mm_container_name cache):cache $image bundle exec rake db:initial_setup >&2 2> init_schema.2.txt"
+    echo $command >> mmdos.bat
+    $command    
 }
 
 
@@ -210,7 +218,9 @@ mm_initdb() {
     echo "mm_initdb begin"
     local image=$(mm_image_name mmooc/db)
     echo "image: $image"
-    docker run --rm -t -i --env-file=env --user=root --volumes-from=$(mm_container_name db-data) $image /bin/bash /root/initdb
+    local command="docker run --rm -t -i --env-file=env --user=root --volumes-from=$(mm_container_name db-data) $image /bin/bash /root/initdb"
+    echo $command >> mmdos.bat
+    $command
     echo "mm_initdb end"
 }
 
@@ -350,16 +360,24 @@ case $command in
         ;;
     rails)
         image=$(mm_image_name mmooc/canvas)
-        docker run --rm -t -i -P --env-file=env --link db:db -w /opt/canvas-lms $image bundle exec rails "$@"
+        local command='docker run --rm -t -i -P --env-file=env --link db:db -w /opt/canvas-lms $image bundle exec rails "$@"'
+        echo $command >> mmdos.bat
+        $command
         ;;
     rails-dev)
-        docker run --rm -t -i -p 3000:3000 --env-file=env -e RAILS_ENV=development --link db:db --link cache:cache -w /opt/canvas-lms mmooc/canvas bundle exec rails "$@"
+        local command='docker run --rm -t -i -p 3000:3000 --env-file=env -e RAILS_ENV=development --link db:db --link cache:cache -w /opt/canvas-lms mmooc/canvas bundle exec rails "$@"'
+        echo $command >> mmdos.bat
+        $command
         ;;
     dev)
-        docker run -t -i -p 3001:3000 --name=$(mm_container_name dev) --env-file=env -e RAILS_ENV=development --link db:db --link cache:cache -w /opt/canvas-lms mmooc/dev
+        local command='docker run -t -i -p 3001:3000 --name=$(mm_container_name dev) --env-file=env -e RAILS_ENV=development --link db:db --link cache:cache -w /opt/canvas-lms mmooc/dev'
+        echo $command >> mmdos.bat
+        $command
         ;;
     rake)
-        docker run --rm -t -i -P --env-file=env -e RAILS_ENV=development -v $canvas_dir:/canvas-lms --link db:db -w /canvas-lms mmooc/canvas bundle exec rake "$@"
+        local command='docker run --rm -t -i -P --env-file=env -e RAILS_ENV=development -v $canvas_dir:/canvas-lms --link db:db -w /canvas-lms mmooc/canvas bundle exec rake "$@"'
+        echo $command >> mmdos.bat
+        $command
         ;;
     reboot)
         mm_stop services
