@@ -119,9 +119,7 @@ docker_run_jobs() {
 
 docker_run_haproxy() {
 #    docker run -d --name canvas-haproxy --link web:web1 -p 443:443 -p 80:80 canvas-haproxy
-    local command='docker_run mmooc/haproxy haproxy "--link web:web1 -p 443:443 -p 80:80"'
-    echo $command >> mmdos.bat
-    $command
+    docker_run mmooc/haproxy haproxy "--link web:web1 -p 443:443 -p 80:80"
 }
 
 container_exists() {
